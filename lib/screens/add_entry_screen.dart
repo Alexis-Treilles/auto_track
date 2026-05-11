@@ -11,14 +11,25 @@ import '../models/expense.dart';
 import '../providers/app_provider.dart';
 
 class AddEntryScreen extends StatefulWidget {
-  const AddEntryScreen({super.key});
+  final int initialTab;
+  final String? initialMaintenanceType;
+  final DateTime? initialDate;
+  final DateTime? initialNextDate;
+
+  const AddEntryScreen({
+    super.key,
+    this.initialTab = 0,
+    this.initialMaintenanceType,
+    this.initialDate,
+    this.initialNextDate,
+  });
 
   @override
   State<AddEntryScreen> createState() => _AddEntryScreenState();
 }
 
 class _AddEntryScreenState extends State<AddEntryScreen> {
-  int _tab = 0;
+  late int _tab;
 
   static const _tabs = [
     (Icons.local_gas_station_rounded, 'Plein'),
@@ -29,7 +40,38 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _tab = widget.initialTab.clamp(0, _tabs.length - 1);
+  }
+
+  Widget _buildForm() {
+    switch (_tab) {
+      case 0:
+        return _FuelForm(initialDate: widget.initialDate);
+      case 1:
+        return _MaintenanceForm(
+          initialType: widget.initialMaintenanceType,
+          initialDate: widget.initialDate,
+          initialNextDate: widget.initialNextDate,
+        );
+      case 2:
+        return _TechnicalControlForm(
+          initialDate: widget.initialDate,
+          initialNextDate: widget.initialNextDate,
+        );
+      case 3:
+        return const _InsuranceForm();
+      case 4:
+        return _ExpenseForm(initialDate: widget.initialDate);
+      default:
+        return const SizedBox();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final p = context.watch<AppProvider>();
     return Container(
       height: MediaQuery.of(context).size.height * 0.92,
       decoration: const BoxDecoration(
@@ -39,7 +81,14 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
       child: Column(children: [
         const SizedBox(height: 8),
         Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        // Vehicle selector
+        _VehicleSelector(
+          vehicles: p.vehicles,
+          selected: p.selectedVehicle,
+          onChanged: (v) => p.selectVehicle(v),
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           height: 72,
           child: ListView.builder(
@@ -73,16 +122,73 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Expanded(
-          child: [
-            const _FuelForm(),
-            const _MaintenanceForm(),
-            const _TechnicalControlForm(),
-            const _InsuranceForm(),
-            const _ExpenseForm(),
-          ][_tab],
-        ),
+        Expanded(child: _buildForm()),
       ]),
+    );
+  }
+}
+
+// ─── VEHICLE SELECTOR ────────────────────────────────────────────────────────
+
+class _VehicleSelector extends StatelessWidget {
+  final List vehicles;
+  final dynamic selected;
+  final void Function(dynamic) onChanged;
+
+  const _VehicleSelector({required this.vehicles, required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    if (vehicles.isEmpty) return const SizedBox();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: vehicles.length == 1
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.card,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                const Icon(Icons.directions_car_rounded, color: AppTheme.primary, size: 18),
+                const SizedBox(width: 10),
+                Text(selected?.name ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              ]),
+            )
+          : PopupMenuButton(
+              onSelected: onChanged,
+              color: AppTheme.card,
+              itemBuilder: (_) => vehicles
+                  .map((v) => PopupMenuItem(
+                        value: v,
+                        child: Row(children: [
+                          Icon(
+                            Icons.directions_car_rounded,
+                            color: v.id == selected?.id ? AppTheme.primary : Colors.white54,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(v.name, style: TextStyle(color: v.id == selected?.id ? AppTheme.primary : Colors.white)),
+                        ]),
+                      ))
+                  .toList(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppTheme.card,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.directions_car_rounded, color: AppTheme.primary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(selected?.name ?? 'Véhicule',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  ),
+                  const Icon(Icons.expand_more_rounded, color: Colors.white38, size: 18),
+                ]),
+              ),
+            ),
     );
   }
 }
@@ -90,7 +196,8 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
 // ─── FUEL ────────────────────────────────────────────────────────────────────
 
 class _FuelForm extends StatefulWidget {
-  const _FuelForm();
+  final DateTime? initialDate;
+  const _FuelForm({this.initialDate});
   @override
   State<_FuelForm> createState() => _FuelFormState();
 }
@@ -101,9 +208,15 @@ class _FuelFormState extends State<_FuelForm> {
   final _liters = TextEditingController();
   final _price = TextEditingController();
   final _station = TextEditingController();
-  DateTime _date = DateTime.now();
+  late DateTime _date;
   bool _fullTank = true;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = widget.initialDate ?? DateTime.now();
+  }
 
   double get _total => (double.tryParse(_liters.text) ?? 0) * (double.tryParse(_price.text) ?? 0);
 
@@ -170,7 +283,10 @@ class _FuelFormState extends State<_FuelForm> {
 // ─── MAINTENANCE ─────────────────────────────────────────────────────────────
 
 class _MaintenanceForm extends StatefulWidget {
-  const _MaintenanceForm();
+  final String? initialType;
+  final DateTime? initialDate;
+  final DateTime? initialNextDate;
+  const _MaintenanceForm({this.initialType, this.initialDate, this.initialNextDate});
   @override
   State<_MaintenanceForm> createState() => _MaintenanceFormState();
 }
@@ -182,10 +298,21 @@ class _MaintenanceFormState extends State<_MaintenanceForm> {
   final _garage = TextEditingController();
   final _desc = TextEditingController();
   final _nextKm = TextEditingController();
-  String _type = MaintenanceEntry.types.first;
-  DateTime _date = DateTime.now();
+  late String _type;
+  late DateTime _date;
   DateTime? _nextDate;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = widget.initialDate ?? DateTime.now();
+    _nextDate = widget.initialNextDate;
+    final init = widget.initialType;
+    _type = (init != null && MaintenanceEntry.types.contains(init))
+        ? init
+        : MaintenanceEntry.types.first;
+  }
 
   @override
   void dispose() { _km.dispose(); _cost.dispose(); _garage.dispose(); _desc.dispose(); _nextKm.dispose(); super.dispose(); }
@@ -247,7 +374,9 @@ class _MaintenanceFormState extends State<_MaintenanceForm> {
 // ─── TECHNICAL CONTROL ───────────────────────────────────────────────────────
 
 class _TechnicalControlForm extends StatefulWidget {
-  const _TechnicalControlForm();
+  final DateTime? initialDate;
+  final DateTime? initialNextDate;
+  const _TechnicalControlForm({this.initialDate, this.initialNextDate});
   @override
   State<_TechnicalControlForm> createState() => _TechnicalControlFormState();
 }
@@ -258,9 +387,16 @@ class _TechnicalControlFormState extends State<_TechnicalControlForm> {
   final _cost = TextEditingController();
   final _center = TextEditingController();
   String _result = TechnicalControl.results.first;
-  DateTime _date = DateTime.now();
+  late DateTime _date;
   DateTime? _nextDate;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = widget.initialDate ?? DateTime.now();
+    _nextDate = widget.initialNextDate;
+  }
 
   @override
   void dispose() { _km.dispose(); _cost.dispose(); _center.dispose(); super.dispose(); }
@@ -387,7 +523,8 @@ class _InsuranceFormState extends State<_InsuranceForm> {
 // ─── EXPENSE ─────────────────────────────────────────────────────────────────
 
 class _ExpenseForm extends StatefulWidget {
-  const _ExpenseForm();
+  final DateTime? initialDate;
+  const _ExpenseForm({this.initialDate});
   @override
   State<_ExpenseForm> createState() => _ExpenseFormState();
 }
@@ -397,8 +534,14 @@ class _ExpenseFormState extends State<_ExpenseForm> {
   final _amount = TextEditingController();
   final _desc = TextEditingController();
   String _type = Expense.types.first;
-  DateTime _date = DateTime.now();
+  late DateTime _date;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = widget.initialDate ?? DateTime.now();
+  }
 
   @override
   void dispose() { _amount.dispose(); _desc.dispose(); super.dispose(); }

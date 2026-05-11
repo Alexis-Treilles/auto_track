@@ -18,6 +18,7 @@ class AppProvider extends ChangeNotifier {
   List<Insurance> _insurances = [];
   List<Expense> _expenses = [];
   List<Map<String, dynamic>> _alerts = [];
+  List<Map<String, dynamic>> _allAlerts = [];
   Map<String, dynamic> _stats = {};
   bool _loading = false;
   String? _error;
@@ -30,18 +31,21 @@ class AppProvider extends ChangeNotifier {
   List<Insurance> get insurances => _insurances;
   List<Expense> get expenses => _expenses;
   List<Map<String, dynamic>> get alerts => _alerts;
+  List<Map<String, dynamic>> get allAlerts => _allAlerts;
   Map<String, dynamic> get stats => _stats;
   bool get loading => _loading;
   String? get error => _error;
+  SupabaseService get svc => _svc;
+  int get notificationCount => _allAlerts.where((a) => a['urgent'] == true).length;
 
   Future<void> loadVehicles() async {
     _loading = true;
     notifyListeners();
     try {
       _vehicles = await _svc.getVehicles();
-      if (_vehicles.isNotEmpty && _selectedVehicle == null) {
-        _selectedVehicle = _vehicles.first;
-        await loadVehicleData();
+      if (_vehicles.isNotEmpty) {
+        if (_selectedVehicle == null) _selectedVehicle = _vehicles.first;
+        await Future.wait([loadVehicleData(), _loadAllAlerts()]);
       }
     } catch (e) {
       _error = e.toString();
@@ -108,6 +112,24 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateVehicle(Vehicle v) async {
+    await _svc.updateVehicle(v.id, v.toJson());
+    final idx = _vehicles.indexWhere((x) => x.id == v.id);
+    if (idx != -1) _vehicles[idx] = v;
+    if (_selectedVehicle?.id == v.id) _selectedVehicle = v;
+    notifyListeners();
+  }
+
+  Future<void> deleteVehicle(String id) async {
+    await _svc.deleteVehicle(id);
+    _vehicles.removeWhere((v) => v.id == id);
+    if (_selectedVehicle?.id == id) {
+      _selectedVehicle = _vehicles.isNotEmpty ? _vehicles.first : null;
+      if (_selectedVehicle != null) await loadVehicleData();
+    }
+    notifyListeners();
+  }
+
   Future<void> addFuelEntry(FuelEntry e) async {
     final created = await _svc.createFuelEntry(e);
     _fuelEntries.insert(0, created);
@@ -146,9 +168,20 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _loadAllAlerts() async {
+    if (_vehicles.isEmpty) return;
+    try {
+      _allAlerts = await _svc.getAllAlerts(_vehicles);
+    } catch (_) {
+      _allAlerts = [];
+    }
+    notifyListeners();
+  }
+
   Future<void> _refreshStats() async {
     if (_selectedVehicle == null) return;
     _stats = await _svc.getVehicleStats(_selectedVehicle!.id);
     _alerts = await _svc.getAlerts(_selectedVehicle!.id);
+    await _loadAllAlerts();
   }
 }

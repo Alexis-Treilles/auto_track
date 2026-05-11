@@ -5,6 +5,8 @@ import '../models/maintenance_entry.dart';
 import '../models/technical_control.dart';
 import '../models/insurance.dart';
 import '../models/expense.dart';
+import '../models/document.dart';
+import '../models/maintenance_part.dart';
 
 class SupabaseService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -143,7 +145,7 @@ class SupabaseService {
       if (m.nextDate != null && m.nextDate!.isAfter(now)) {
         final days = m.nextDate!.difference(now).inDays;
         if (days <= 30) {
-          alerts.add({'type': 'maintenance', 'title': 'Entretien: ${m.type}', 'days': days, 'date': m.nextDate, 'urgent': days <= 7});
+          alerts.add({'type': 'maintenance', 'title': 'Entretien: ${m.type}', 'days': days, 'date': m.nextDate, 'urgent': days <= 7, 'vehicleId': vehicleId});
         }
       }
     }
@@ -152,7 +154,7 @@ class SupabaseService {
       if (c.nextDate != null && c.nextDate!.isAfter(now)) {
         final days = c.nextDate!.difference(now).inDays;
         if (days <= 60) {
-          alerts.add({'type': 'control', 'title': 'Controle Technique', 'days': days, 'date': c.nextDate, 'urgent': days <= 14});
+          alerts.add({'type': 'control', 'title': 'Controle Technique', 'days': days, 'date': c.nextDate, 'urgent': days <= 14, 'vehicleId': vehicleId});
         }
       }
     }
@@ -161,11 +163,43 @@ class SupabaseService {
       if (i.isActive) {
         final days = i.daysUntilExpiry;
         if (days <= 30) {
-          alerts.add({'type': 'insurance', 'title': 'Assurance: ${i.company}', 'days': days, 'date': i.endDate, 'urgent': days <= 7});
+          alerts.add({'type': 'insurance', 'title': 'Assurance: ${i.company}', 'days': days, 'date': i.endDate, 'urgent': days <= 7, 'vehicleId': vehicleId});
         }
       }
     }
     alerts.sort((a, b) => (a['days'] as int).compareTo(b['days'] as int));
     return alerts;
+  }
+
+  Future<List<MaintenancePart>> getParts(String maintenanceId) async {
+    try {
+      final res = await _db.from('maintenance_parts').select()
+          .eq('maintenance_id', maintenanceId);
+      return (res as List).map((j) => MaintenancePart.fromJson(j)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Document>> getDocuments(String entryType, String entryId) async {
+    try {
+      final res = await _db.from('documents').select()
+          .eq('entry_type', entryType).eq('entry_id', entryId).order('created_at');
+      return (res as List).map((j) => Document.fromJson(j)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllAlerts(List<Vehicle> vehicles) async {
+    final all = <Map<String, dynamic>>[];
+    for (final v in vehicles) {
+      final alerts = await getAlerts(v.id);
+      for (final a in alerts) {
+        all.add({...a, 'vehicleName': v.name});
+      }
+    }
+    all.sort((a, b) => (a['days'] as int).compareTo(b['days'] as int));
+    return all;
   }
 }

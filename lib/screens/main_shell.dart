@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../providers/app_provider.dart';
 import 'dashboard_screen.dart';
-import 'vehicles_screen.dart';
+import 'notifications_screen.dart';
 import 'add_entry_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
@@ -20,13 +20,16 @@ class _MainShellState extends State<MainShell> {
 
   static const _screens = [
     DashboardScreen(),
+    NotificationsScreen(),
     StatsScreen(),
-    VehiclesScreen(),
     SettingsScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final p = context.watch<AppProvider>();
+    final alertCount = p.allAlerts.length;
+
     return Scaffold(
       body: _screens[_index],
       floatingActionButton: FloatingActionButton(
@@ -44,10 +47,10 @@ class _MainShellState extends State<MainShell> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _NavBtn(Icons.dashboard_rounded, 'Tableau', 0, _index, (i) => setState(() => _index = i)),
-            _NavBtn(Icons.bar_chart_rounded, 'Stats', 1, _index, (i) => setState(() => _index = i)),
+            _NavBadge(Icons.notifications_rounded, 'Alertes', 1, _index, (i) => setState(() => _index = i), alertCount),
             const SizedBox(width: 48),
-            _NavBtn(Icons.directions_car_rounded, 'Véhicules', 2, _index, (i) => setState(() => _index = i)),
-            _NavBtn(Icons.settings_rounded, 'Paramètres', 3, _index, (i) => setState(() => _index = i)),
+            _NavBtn(Icons.bar_chart_rounded, 'Stats', 2, _index, (i) => setState(() => _index = i)),
+            _NavBtn(Icons.person_rounded, 'Compte', 3, _index, (i) => setState(() => _index = i)),
           ],
         ),
       ),
@@ -89,6 +92,52 @@ class _NavBtn extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: sel ? AppTheme.primary : Colors.white38, size: 24),
           Text(label, style: TextStyle(color: sel ? AppTheme.primary : Colors.white38, fontSize: 10)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _NavBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int index, current;
+  final void Function(int) onTap;
+  final int count;
+
+  const _NavBadge(this.icon, this.label, this.index, this.current, this.onTap, this.count);
+
+  @override
+  Widget build(BuildContext context) {
+    final sel = index == current;
+    final color = sel ? AppTheme.primary : Colors.white38;
+    return InkWell(
+      onTap: () => onTap(index),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(icon, color: color, size: 24),
+              if (count > 0)
+                Positioned(
+                  top: -4, right: -6,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          Text(label, style: TextStyle(color: color, fontSize: 10)),
         ]),
       ),
     );

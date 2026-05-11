@@ -14,7 +14,7 @@ class SettingsScreen extends StatelessWidget {
     final user = Supabase.instance.client.auth.currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Paramètres')),
+      appBar: AppBar(title: const Text('Compte')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
